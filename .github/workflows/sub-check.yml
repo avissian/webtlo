@@ -44,6 +44,9 @@ jobs:
       - name: Test Transmission labels
         run: php qa/TransmissionLabelsTest.php
 
+      - name: Test unregistered torrent selection
+        run: php qa/UnregisteredTopicAddTest.php
+
       - name: Restore tools cache
         id: cache-tools
         uses: actions/cache/restore@v6
