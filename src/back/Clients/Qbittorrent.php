@@ -82,7 +82,7 @@ final class Qbittorrent implements ClientInterface
         private readonly TableTopics          $tableTopics,
         private readonly TableTorrents        $tableTorrents,
     ) {
-        /** В отладочной сборке проверяем добавление без паузы. */
+        /** В отладочной сборке добавляем раздачи без паузы. */
         $this->torrentAddingSleep = 0;
         /** Клиент позволяет присваивать раздаче категорию при добавлении. */
         $this->categoryAddingAllowed = true;
