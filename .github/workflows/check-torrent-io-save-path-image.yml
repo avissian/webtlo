@@ -1,0 +1,55 @@
+name: Check torrent I/O save-path image
+
+on:
+  push:
+    branches:
+      - debug/torrent-io-save-path-20260913
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        platform: [linux/amd64, linux/arm64]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Write debug version
+        id: metadata
+        run: |
+          branch_tag="${GITHUB_REF_NAME//\//-}"
+          base_version="$(jq -r '.version' version.json)"
+          version="${base_version}-br-${branch_tag}"
+          jq --arg version "$version" --arg sha "${GITHUB_SHA:0:7}" \
+            '.version = $version | .sha = $sha | .installation = "docker"' \
+            version.json > version.tmp.json
+          mv version.tmp.json version.json
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build image without publishing
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: prod
+          push: false
+          load: true
+          provenance: false
+          platforms: ${{ matrix.platform }}
+          tags: webtlo:save-path-check
+
+      - name: Check image version and database schema
+        run: |
+          docker run --rm --platform '${{ matrix.platform }}' --entrypoint cat \
+            webtlo:save-path-check /var/www/webtlo/version.json \
+            | jq -e --arg expected '${{ steps.metadata.outputs.version }}' \
+                '.version == $expected and .installation == "docker"'
+          schema_version="$(docker run --rm --platform '${{ matrix.platform }}' \
+            --entrypoint php webtlo:save-path-check -r \
+            'require "vendor/autoload.php"; echo \KeepersTeam\Webtlo\Infrastructure\Database\MigrationRunner::DATABASE_VERSION;')"
+          test "$schema_version" = 16

@@ -31,7 +31,7 @@ jobs:
 
   docker:
     name: Build
-    if: ${{ needs.check-secrets.outputs.valid == 'true' && github.ref_name != 'debug/torrent-io-timings-20260913' }}
+    if: ${{ needs.check-secrets.outputs.valid == 'true' && !startsWith(github.ref_name, 'debug/') }}
     needs: [validate, metadata, check-secrets]
     uses: ./.github/workflows/sub-build-docker.yml
     with:

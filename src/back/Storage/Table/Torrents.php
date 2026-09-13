@@ -90,7 +90,7 @@ final class Torrents
      *
      * @param string[] $hashes хеши актуальных версий
      *
-     * @return array<string, string[]> хеши предыдущих версий по хешу актуальной
+     * @return array<string, string[]> хеши предыдущих версий в клиенте по хешу актуальной
      */
     public function getUpdatedPreviousHashes(array $hashes, int $clientId): array
     {
@@ -99,7 +99,8 @@ final class Torrents
             $search = KeysObject::create($chunk);
             $rows   = $this->con->query(
                 "
-                    SELECT current.info_hash AS current_hash, previous.info_hash AS previous_hash
+                    SELECT current.info_hash AS current_hash,
+                           COALESCE(NULLIF(previous.client_hash, ''), previous.info_hash) AS previous_hash
                     FROM Topics AS current
                     INNER JOIN Torrents AS previous ON previous.topic_id = current.id
                     INNER JOIN TopicsUnregistered AS unregistered ON unregistered.info_hash = previous.info_hash

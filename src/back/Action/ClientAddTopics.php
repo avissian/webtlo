@@ -249,6 +249,7 @@ final class ClientAddTopics
 
         $previousPaths = [];
         if ($client instanceof SavePathLookupInterface) {
+            $lookupStart = hrtime(true);
             $previousHashes = $this->torrents->getUpdatedPreviousHashes(
                 hashes  : array_map(static fn(DownloadedTopic $topic) => $topic->hash, $topics),
                 clientId: $subForum->clientId,
@@ -271,6 +272,13 @@ final class ClientAddTopics
                     }
                 }
             }
+            $this->logger->debug('Torrent save path lookup timing', [
+                'client_id'      => $subForum->clientId,
+                'subforum_id'    => $subForum->id,
+                'updated_topics' => count($previousHashes),
+                'resolved_paths' => count($previousPaths),
+                'elapsed_ms'     => round((hrtime(true) - $lookupStart) / 1_000_000, 1),
+            ]);
         }
 
         // Убираем последний слэш в пути каталога для данных
