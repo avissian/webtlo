@@ -249,7 +249,7 @@ final class ClientAddTopics
 
         $previousPaths = [];
         if ($client instanceof SavePathLookupInterface) {
-            $lookupStart = hrtime(true);
+            $lookupStart    = hrtime(true);
             $previousHashes = $this->torrents->getUpdatedPreviousHashes(
                 hashes  : array_map(static fn(DownloadedTopic $topic) => $topic->hash, $topics),
                 clientId: $subForum->clientId,
