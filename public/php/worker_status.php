@@ -47,6 +47,7 @@ foreach ($fields as $name => $source) {
 
 // Read the configured limit rather than assuming the Docker default of two.
 $poolConfig = @file_get_contents('/etc/php82/php-fpm.d/www.conf');
+
 $counters['max_children'] = is_string($poolConfig)
     && preg_match('/^\s*pm\.max_children\s*=\s*(\d+)\s*$/m', $poolConfig, $matches)
         ? (int) $matches[1]
