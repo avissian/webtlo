@@ -31,8 +31,8 @@ RUN apk add --update --no-cache \
 ARG S6_OVERLAY_DOWNLOAD="https://github.com/just-containers/s6-overlay/releases/download/${S6_OVERLAY_VERSION}"
 RUN \
     export S6_ARCH=$(uname -m) && \
-    curl -L -s "${S6_OVERLAY_DOWNLOAD}/s6-overlay-noarch.tar.xz"     | tar Jxpf - -C / && \
-    curl -L -s "${S6_OVERLAY_DOWNLOAD}/s6-overlay-${S6_ARCH}.tar.xz" | tar Jxpf - -C / && \
+    curl -fLsS --retry 5 --retry-all-errors --retry-delay 2 "${S6_OVERLAY_DOWNLOAD}/s6-overlay-noarch.tar.xz"     | tar Jxpf - -C / && \
+    curl -fLsS --retry 5 --retry-all-errors --retry-delay 2 "${S6_OVERLAY_DOWNLOAD}/s6-overlay-${S6_ARCH}.tar.xz" | tar Jxpf - -C / && \
     # Move /init somewhere else to prevent issues with podman/RHEL
     mv /init /s6-init
 
