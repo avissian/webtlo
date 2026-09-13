@@ -6,6 +6,9 @@ on:
       REGISTRY_IMAGE:
         required: true
         type: string
+      GHCR_ONLY:
+        type: boolean
+        default: false
       WEBTLO_VERSION:
         type: string
         default: 'unknown'
@@ -14,9 +17,9 @@ on:
         default: 'none'
     secrets:
       DOCKER_HUB_USERNAME:
-        required: true
+        required: false
       DOCKER_HUB_ACCESS_TOKEN:
-        required: true
+        required: false
 
 jobs:
 
@@ -40,7 +43,7 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: |
-            ${{ inputs.REGISTRY_IMAGE }}
+            name=${{ inputs.REGISTRY_IMAGE }},enable=${{ !inputs.GHCR_ONLY }}
             ghcr.io/${{ github.repository }}
           tags: |
             type=schedule
@@ -58,6 +61,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Login to DockerHub
+        if: ${{ !inputs.GHCR_ONLY }}
         uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
