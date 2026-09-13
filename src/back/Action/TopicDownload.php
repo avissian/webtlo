@@ -54,7 +54,7 @@ final class TopicDownload
         $fileWriteTimeNs = 0;
         foreach ($hashes as $topicHash) {
             $downloadStart = hrtime(true);
-            $data = $this->forumClient->downloadTorrent(
+            $data          = $this->forumClient->downloadTorrent(
                 infoHash    : $topicHash,
                 addRetracker: $this->downloadOptions->addRetracker
             );
@@ -89,7 +89,7 @@ final class TopicDownload
 
             // Записываем содержимое торрент-файла в созданный ранее каталог.
             $fileWriteStart = hrtime(true);
-            $fileSaved = file_put_contents(
+            $fileSaved      = file_put_contents(
                 sprintf($torrentFilePathTemplate, $topicHash),
                 $data
             );

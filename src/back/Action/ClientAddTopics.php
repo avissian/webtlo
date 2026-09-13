@@ -83,7 +83,7 @@ final class ClientAddTopics
 
             // Подключаемся к торрент-клиенту. Если недоступен - пропускаем.
             $connectStart = hrtime(true);
-            $client = $this->clientFactory->getClientById(clientId: $subForum->clientId);
+            $client       = $this->clientFactory->getClientById(clientId: $subForum->clientId);
             $this->logger->debug('Torrent client connection timing', [
                 'client_id'   => $subForum->clientId,
                 'subforum_id' => $subForum->id,
@@ -176,7 +176,7 @@ final class ClientAddTopics
      */
     private function downloadTorrentFiles(array $forumTopics, int $subForumId): array
     {
-        $stageStart = hrtime(true);
+        $stageStart              = hrtime(true);
         $torrentFilePathTemplate = $this->getTorrentFilePathTemplate();
 
         $downloadedTorrents = [];
@@ -190,7 +190,7 @@ final class ClientAddTopics
             );
 
             $downloadStart = hrtime(true);
-            $stream = $this->forumClient->downloadTorrent(
+            $stream        = $this->forumClient->downloadTorrent(
                 infoHash    : $topic->hash,
                 addRetracker: $this->downloadOptions->addRetracker,
             );
@@ -238,7 +238,7 @@ final class ClientAddTopics
      */
     private function addTorrentsToClient(array $topics, ClientInterface $client, SubForum $subForum): array
     {
-        $stageStart = hrtime(true);
+        $stageStart        = hrtime(true);
         $clientAddingSleep = $client->getTorrentAddingSleep();
 
         // Убираем последний слэш в пути каталога для данных
