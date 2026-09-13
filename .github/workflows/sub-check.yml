@@ -51,16 +51,6 @@ jobs:
       - name: Run PHP-CS-Fixer
         run: composer cs:check
 
-      - name: Show formatting diff for torrent debug branch
-        if: ${{ failure() && github.ref_name == 'debug/torrent-io-timings-20260913' }}
-        run: |
-          composer cs:fix
-          echo '```diff' >> "$GITHUB_STEP_SUMMARY"
-          git diff -- src/back/Action/ClientAddTopics.php src/back/Action/TopicDownload.php src/back/Clients/Qbittorrent.php >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          diff_base64=$(git diff -- src/back/Action/ClientAddTopics.php src/back/Action/TopicDownload.php src/back/Clients/Qbittorrent.php | base64 -w0)
-          echo "::error title=PHP-CS-Fixer diff (base64)::$diff_base64"
-
       - name: Run PHPStan
         run: composer phpstan
 

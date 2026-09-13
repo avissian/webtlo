@@ -106,11 +106,11 @@ final class TopicDownload
         }
 
         $this->logger->debug('Torrent download timing', [
-            'attempted'         => count($hashes),
-            'saved'             => count($filesDownloaded),
-            'requests_ms'       => round($downloadTimeNs / 1_000_000, 1),
+            'attempted'          => count($hashes),
+            'saved'              => count($filesDownloaded),
+            'requests_ms'        => round($downloadTimeNs / 1_000_000, 1),
             'slowest_request_ms' => round($maxDownloadNs / 1_000_000, 1),
-            'file_write_ms'     => round($fileWriteTimeNs / 1_000_000, 1),
+            'file_write_ms'      => round($fileWriteTimeNs / 1_000_000, 1),
         ]);
 
         $result = sprintf(

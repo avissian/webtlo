@@ -383,6 +383,7 @@ final class Qbittorrent implements ClientInterface
     private function makeRequest(string $url, array $params = []): array
     {
         $requestStart = hrtime(true);
+
         try {
             $response = $this->request(url: $url, params: $params);
         } catch (GuzzleException $e) {
@@ -391,10 +392,10 @@ final class Qbittorrent implements ClientInterface
             throw new RuntimeException('Failed to make request');
         } finally {
             $elapsedMs = (hrtime(true) - $requestStart) / 1_000_000;
-            $timing = $this->requestTimings[$url] ?? ['count' => 0, 'total_ms' => 0.0, 'slowest_ms' => 0.0];
-            $timing['count']++;
+            $timing    = $this->requestTimings[$url] ?? ['count' => 0, 'total_ms' => 0.0, 'slowest_ms' => 0.0];
+            ++$timing['count'];
             $timing['total_ms'] += $elapsedMs;
-            $timing['slowest_ms'] = max($timing['slowest_ms'], $elapsedMs);
+            $timing['slowest_ms']       = max($timing['slowest_ms'], $elapsedMs);
             $this->requestTimings[$url] = $timing;
         }
 
