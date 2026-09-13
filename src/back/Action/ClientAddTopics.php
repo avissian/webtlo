@@ -82,13 +82,19 @@ final class ClientAddTopics
             }
 
             // Подключаемся к торрент-клиенту. Если недоступен - пропускаем.
+            $connectStart = hrtime(true);
             $client = $this->clientFactory->getClientById(clientId: $subForum->clientId);
+            $this->logger->debug('Torrent client connection timing', [
+                'client_id'   => $subForum->clientId,
+                'subforum_id' => $subForum->id,
+                'elapsed_ms'  => round((hrtime(true) - $connectStart) / 1_000_000, 1),
+            ]);
             if ($client === null) {
                 continue;
             }
 
             // Пробуем скачать торрент-файлы раздач во временную папку.
-            $downloadedTorrents = $this->downloadTorrentFiles(forumTopics: $forumTopics);
+            $downloadedTorrents = $this->downloadTorrentFiles(forumTopics: $forumTopics, subForumId: $subForum->id);
             unset($subForumId, $forumTopics);
 
             if (!count($downloadedTorrents)) {
@@ -168,11 +174,14 @@ final class ClientAddTopics
      *
      * @return DownloadedTopic[]
      */
-    private function downloadTorrentFiles(array $forumTopics): array
+    private function downloadTorrentFiles(array $forumTopics, int $subForumId): array
     {
+        $stageStart = hrtime(true);
         $torrentFilePathTemplate = $this->getTorrentFilePathTemplate();
 
         $downloadedTorrents = [];
+        $downloadTimeNs     = 0;
+        $maxDownloadTimeNs  = 0;
         foreach ($forumTopics as $row) {
             $topic = new DownloadedTopic(
                 hash    : $row['info_hash'],
@@ -180,10 +189,14 @@ final class ClientAddTopics
                 filePath: sprintf($torrentFilePathTemplate, $row['info_hash'])
             );
 
+            $downloadStart = hrtime(true);
             $stream = $this->forumClient->downloadTorrent(
                 infoHash    : $topic->hash,
                 addRetracker: $this->downloadOptions->addRetracker,
             );
+            $elapsedNs = hrtime(true) - $downloadStart;
+            $downloadTimeNs += $elapsedNs;
+            $maxDownloadTimeNs = max($maxDownloadTimeNs, $elapsedNs);
             if ($stream === null) {
                 $this->logger->error('Не удалось скачать торрент-файл', $topic->jsonSerialize());
 
@@ -206,6 +219,15 @@ final class ClientAddTopics
             $downloadedTorrents[] = $topic;
         }
 
+        $this->logger->debug('Torrent file download timing', [
+            'subforum_id' => $subForumId,
+            'attempted'   => count($forumTopics),
+            'saved'       => count($downloadedTorrents),
+            'stage_ms'    => round((hrtime(true) - $stageStart) / 1_000_000, 1),
+            'requests_ms' => round($downloadTimeNs / 1_000_000, 1),
+            'slowest_ms'  => round($maxDownloadTimeNs / 1_000_000, 1),
+        ]);
+
         return $downloadedTorrents;
     }
 
@@ -216,6 +238,7 @@ final class ClientAddTopics
      */
     private function addTorrentsToClient(array $topics, ClientInterface $client, SubForum $subForum): array
     {
+        $stageStart = hrtime(true);
         $clientAddingSleep = $client->getTorrentAddingSleep();
 
         // Убираем последний слэш в пути каталога для данных
@@ -223,24 +246,46 @@ final class ClientAddTopics
         $dataFolder = rtrim($dataFolder, '/\\');
 
         $addedTorrentHashes = [];
+        $addTimeNs          = 0;
+        $maxAddTimeNs       = 0;
+        $sleepTimeNs        = 0;
         // Добавление раздач в торрент-клиенты.
         foreach ($topics as $topic) {
             $torrentSavePath = $this->makeTopicContentPath(topic: $topic, dataPath: $dataFolder, subForum: $subForum);
 
             // Добавляем раздачу в торрент-клиент.
+            $addStart = hrtime(true);
             $response = $client->addTorrent(
                 torrentFilePath: $topic->filePath,
                 savePath       : $torrentSavePath,
                 label          : $subForum->label
             );
+            $elapsedNs = hrtime(true) - $addStart;
+            $addTimeNs += $elapsedNs;
+            $maxAddTimeNs = max($maxAddTimeNs, $elapsedNs);
 
             if ($response !== false) {
                 $addedTorrentHashes[] = $topic->hash;
             }
 
-            // Пауза между добавлениями раздач, в зависимости от клиента (0.5 сек по умолчанию)
-            usleep($clientAddingSleep);
+            // Пауза между добавлениями раздач, если она нужна клиенту.
+            if ($clientAddingSleep > 0) {
+                $sleepStart = hrtime(true);
+                usleep($clientAddingSleep);
+                $sleepTimeNs += hrtime(true) - $sleepStart;
+            }
         }
+
+        $this->logger->debug('Torrent client add timing', [
+            'client_id'          => $subForum->clientId,
+            'subforum_id'        => $subForum->id,
+            'attempted'          => count($topics),
+            'accepted'           => count($addedTorrentHashes),
+            'stage_ms'           => round((hrtime(true) - $stageStart) / 1_000_000, 1),
+            'requests_ms'        => round($addTimeNs / 1_000_000, 1),
+            'slowest_request_ms' => round($maxAddTimeNs / 1_000_000, 1),
+            'sleep_ms'           => round($sleepTimeNs / 1_000_000, 1),
+        ]);
 
         return $addedTorrentHashes;
     }

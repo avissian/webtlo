@@ -49,6 +49,9 @@ final class Qbittorrent implements ClientInterface
      */
     private ?array $categories = null;
 
+    /** @var array<string, array{count: int, total_ms: float, slowest_ms: float}> */
+    private array $requestTimings = [];
+
     /**
      * Статусы ошибок.
      *
@@ -79,8 +82,8 @@ final class Qbittorrent implements ClientInterface
         private readonly TableTopics          $tableTopics,
         private readonly TableTorrents        $tableTorrents,
     ) {
-        /** Пауза между добавлением раздач в торрент-клиент, миллисекунды. */
-        $this->torrentAddingSleep = 100;
+        /** В отладочной сборке проверяем добавление без паузы. */
+        $this->torrentAddingSleep = 0;
         /** Клиент позволяет присваивать раздаче категорию при добавлении. */
         $this->categoryAddingAllowed = true;
 
@@ -104,6 +107,8 @@ final class Qbittorrent implements ClientInterface
 
     public function getTorrents(array $filter = []): Torrents
     {
+        $this->requestTimings = [];
+
         /** Получить просто список раздач без дополнительных действий */
         $simpleRun = (bool) ($filter['simple'] ?? 0);
 
@@ -131,6 +136,7 @@ final class Qbittorrent implements ClientInterface
         }
 
         $this->logger->debug('Done processing', Timers::getStash());
+        $this->logger->debug('qBittorrent API request timing', ['routes' => $this->requestTimings]);
 
         return new Torrents(torrents: $torrents);
     }
@@ -376,12 +382,20 @@ final class Qbittorrent implements ClientInterface
      */
     private function makeRequest(string $url, array $params = []): array
     {
+        $requestStart = hrtime(true);
         try {
             $response = $this->request(url: $url, params: $params);
         } catch (GuzzleException $e) {
             $this->logger->error('Failed to make request', ['error' => $e->getCode(), 'message' => $e->getMessage()]);
 
             throw new RuntimeException('Failed to make request');
+        } finally {
+            $elapsedMs = (hrtime(true) - $requestStart) / 1_000_000;
+            $timing = $this->requestTimings[$url] ?? ['count' => 0, 'total_ms' => 0.0, 'slowest_ms' => 0.0];
+            $timing['count']++;
+            $timing['total_ms'] += $elapsedMs;
+            $timing['slowest_ms'] = max($timing['slowest_ms'], $elapsedMs);
+            $this->requestTimings[$url] = $timing;
         }
 
         return json_decode($response->getBody()->getContents(), true);

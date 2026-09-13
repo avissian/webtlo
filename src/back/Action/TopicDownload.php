@@ -49,11 +49,18 @@ final class TopicDownload
         $this->logger->info($log_string);
 
         $filesDownloaded = [];
+        $downloadTimeNs  = 0;
+        $maxDownloadNs   = 0;
+        $fileWriteTimeNs = 0;
         foreach ($hashes as $topicHash) {
+            $downloadStart = hrtime(true);
             $data = $this->forumClient->downloadTorrent(
                 infoHash    : $topicHash,
                 addRetracker: $this->downloadOptions->addRetracker
             );
+            $elapsedNs = hrtime(true) - $downloadStart;
+            $downloadTimeNs += $elapsedNs;
+            $maxDownloadNs = max($maxDownloadNs, $elapsedNs);
             if ($data === null) {
                 continue;
             }
@@ -81,10 +88,12 @@ final class TopicDownload
             }
 
             // Записываем содержимое торрент-файла в созданный ранее каталог.
+            $fileWriteStart = hrtime(true);
             $fileSaved = file_put_contents(
                 sprintf($torrentFilePathTemplate, $topicHash),
                 $data
             );
+            $fileWriteTimeNs += hrtime(true) - $fileWriteStart;
             if ($fileSaved === false) {
                 $this->logger->warning("Произошла ошибка при сохранении торрент-файла ($topicHash)");
 
@@ -95,6 +104,14 @@ final class TopicDownload
 
             unset($topicHash, $data, $fileSaved);
         }
+
+        $this->logger->debug('Torrent download timing', [
+            'attempted'         => count($hashes),
+            'saved'             => count($filesDownloaded),
+            'requests_ms'       => round($downloadTimeNs / 1_000_000, 1),
+            'slowest_request_ms' => round($maxDownloadNs / 1_000_000, 1),
+            'file_write_ms'     => round($fileWriteTimeNs / 1_000_000, 1),
+        ]);
 
         $result = sprintf(
             'Сохранено в каталоге "%s": %d шт. за %s.',
