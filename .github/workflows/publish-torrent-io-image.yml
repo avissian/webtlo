@@ -18,7 +18,7 @@ jobs:
       - name: Write debug version
         run: |
           jq --arg sha "${GITHUB_SHA:0:7}" \
-            '.version = "4.5.99-br-debug-torrent-io-timings-20260913" | .sha = $sha | .installation = "docker"' \
+            '.version = "4.6.0-br-debug-torrent-io-timings-20260913" | .sha = $sha | .installation = "docker"' \
             version.json > version.tmp.json
           mv version.tmp.json version.json
 

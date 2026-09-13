@@ -53,9 +53,6 @@ final class Transmission implements ClientInterface
         private readonly LoggerInterface      $logger,
         private readonly TorrentClientOptions $options,
     ) {
-        /** Клиент позволяет присваивать раздаче категорию при добавлении. */
-        $this->categoryAddingAllowed = true;
-
         // Обработчик для получения токена авторизации.
         $authMiddleware = GuzzleRetryMiddleware::factory([
             'max_retry_attempts' => 2,
@@ -82,6 +79,17 @@ final class Transmission implements ClientInterface
                 'Не удалось авторизоваться в transmission api. Проверьте параметры доступа к клиенту.'
             );
         }
+    }
+
+    public function isLabelAddingAllowed(): bool
+    {
+        return $this->rpcVersion >= 17;
+    }
+
+    public function getPostAddLabelDelay(int $torrentCount): ?int
+    {
+        // В Transmission 3.0 ответ torrent-add приходит после создания раздачи.
+        return $this->rpcVersion >= 16 ? 0 : null;
     }
 
     public function getTorrents(array $filter = []): Torrents
@@ -182,8 +190,15 @@ final class Transmission implements ClientInterface
         if (!empty($savePath)) {
             $fields['download-dir'] = $savePath;
         }
-        if (!empty($label)) {
-            $fields['labels'] = [$this->prepareLabel(label: $label)];
+        if ($label !== '' && $this->rpcVersion >= 16) {
+            $label = $this->prepareLabel(label: $label);
+            if ($label === null) {
+                return false;
+            }
+
+            if ($label !== '' && $this->isLabelAddingAllowed()) {
+                $fields['labels'] = [$label];
+            }
         }
 
         $result = $this->makeRequest(method: 'torrent-add', params: $fields);
@@ -206,10 +221,15 @@ final class Transmission implements ClientInterface
             return false;
         }
 
+        $label = $this->prepareLabel(label: $label);
+        if ($label === null) {
+            return false;
+        }
+
         return $this->actionTorrents(
             method: 'torrent-set',
             hashes: $torrentHashes,
-            extra : ['labels' => [$this->prepareLabel(label: $label)]],
+            extra : ['labels' => $label === '' ? [] : [$label]],
         );
     }
 
@@ -340,7 +360,28 @@ final class Transmission implements ClientInterface
         try {
             $response = $this->request(method: $method, options: $params);
 
-            return $response->getStatusCode() === 200;
+            if ($response->getStatusCode() !== 200) {
+                return false;
+            }
+
+            $result = json_decode(
+                json: $response->getBody()->getContents(),
+                associative: true,
+                flags: JSON_INVALID_UTF8_SUBSTITUTE,
+            );
+            if (!is_array($result) || !is_string($result['result'] ?? null)) {
+                $this->logger->warning('Invalid Transmission RPC action response', ['method' => $method]);
+
+                return false;
+            }
+
+            if ($result['result'] !== 'success') {
+                $this->logger->warning('Transmission RPC action failed', ['method' => $method]);
+
+                return false;
+            }
+
+            return true;
         } catch (Throwable $e) {
             $this->logger->warning('Failed to send request', ['code' => $e->getCode(), 'message' => $e->getMessage()]);
         }
@@ -364,12 +405,17 @@ final class Transmission implements ClientInterface
         }
 
         $result = true;
-        foreach (array_chunk($hashes, self::ACTION_CHUNK_SIZE) as $chunk) {
+        foreach (array_chunk($hashes, self::ACTION_CHUNK_SIZE) as $chunkIndex => $chunk) {
             $response = $this->sendRequest(
                 method: $method,
                 params: ['ids' => $chunk, ...$extra],
             );
             if ($response === false) {
+                $this->logger->warning('Transmission action batch failed', [
+                    'method' => $method,
+                    'batch'  => $chunkIndex + 1,
+                    'count'  => count($chunk),
+                ]);
                 $result = false;
             }
         }
@@ -428,8 +474,15 @@ final class Transmission implements ClientInterface
         };
     }
 
-    private function prepareLabel(string $label): string
+    private function prepareLabel(string $label): ?string
     {
-        return (string) str_replace(',', '', $label);
+        $label = trim($label);
+        if (str_contains($label, ',')) {
+            $this->logger->warning('Transmission label contains a forbidden comma');
+
+            return null;
+        }
+
+        return $label;
     }
 }
