@@ -58,7 +58,7 @@ jobs:
             cache-tools-${{ github.repository }}-
 
       - name: Run PHP-CS-Fixer
-        run: composer cs:check
+        run: composer cs:check -- --diff
 
       - name: Run PHPStan
         run: composer phpstan
