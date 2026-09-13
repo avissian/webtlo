@@ -47,8 +47,7 @@ final class LoggerConstructor
         ?LogFile $logFile = null,
         Level $level = Level::Info,
         bool $logToTab = false,
-    ): LoggerInterface
-    {
+    ): LoggerInterface {
         $appLogFile = LogFile::Main;
 
         $logger = new Logger(name: $appLogFile->value);

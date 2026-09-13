@@ -15,9 +15,9 @@ if ($request === false) {
 }
 
 curl_setopt_array($request, [
-    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_RETURNTRANSFER    => true,
     CURLOPT_CONNECTTIMEOUT_MS => 500,
-    CURLOPT_TIMEOUT_MS => 1500,
+    CURLOPT_TIMEOUT_MS        => 1500,
 ]);
 
 $response = curl_exec($request);
