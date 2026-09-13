@@ -1,4 +1,4 @@
-name: Check torrent I/O debug image
+name: Publish torrent I/O debug image
 
 on:
   push:
@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  packages: write
 
 jobs:
   image:
@@ -17,17 +18,25 @@ jobs:
       - name: Write debug version
         run: |
           jq --arg sha "${GITHUB_SHA:0:7}" \
-            '.version += "-br-debug-torrent-io-timings-20260913" | .sha = $sha | .installation = "docker"' \
+            '.version = "4.5.99-br-debug-torrent-io-timings-20260913" | .sha = $sha | .installation = "docker"' \
             version.json > version.tmp.json
           mv version.tmp.json version.json
 
       - uses: docker/setup-qemu-action@v4
       - uses: docker/setup-buildx-action@v4
 
-      - name: Build debug image without publishing
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish debug image
         uses: docker/build-push-action@v7
         with:
           context: .
-          push: false
+          push: true
           provenance: false
           platforms: linux/amd64,linux/arm64
+          tags: ghcr.io/avissian/webtlo:debug-torrent-io-timings-20260913
