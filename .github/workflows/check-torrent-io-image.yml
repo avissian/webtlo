@@ -1,0 +1,33 @@
+name: Check torrent I/O debug image
+
+on:
+  push:
+    branches:
+      - debug/torrent-io-timings-20260913
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Write debug version
+        run: |
+          jq --arg sha "${GITHUB_SHA:0:7}" \
+            '.version += "-br-debug-torrent-io-timings-20260913" | .sha = $sha | .installation = "docker"' \
+            version.json > version.tmp.json
+          mv version.tmp.json version.json
+
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build debug image without publishing
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          provenance: false
+          platforms: linux/amd64,linux/arm64
