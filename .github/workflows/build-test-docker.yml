@@ -1,4 +1,4 @@
-name: Check integrated test Docker image
+name: Build integrated test Docker image
 
 on:
   push:
@@ -57,3 +57,48 @@ jobs:
           docker run --rm --platform '${{ matrix.platform }}' --entrypoint cat \
             webtlo:integrated-test /var/www/webtlo/version.json \
             | jq -e '.version == "4.6.0-br-test-integrated-20260913" and .installation == "docker" and (.sha | length == 7)'
+
+  publish:
+    if: github.repository == 'avissian/webtlo'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set test image version
+        run: |
+          short_sha="${GITHUB_SHA:0:7}"
+          jq \
+            --arg version '4.6.0-br-test-integrated-20260913' \
+            --arg sha "$short_sha" \
+            '.version = $version | .sha = $sha | .installation = "docker" | .github = "https://github.com/avissian/webtlo"' \
+            version.json > version.tmp.json
+          mv version.tmp.json version.json
+
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish test image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: prod
+          push: true
+          provenance: false
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ghcr.io/avissian/webtlo:test-integrated-20260913
+            ghcr.io/avissian/webtlo:sha-${{ github.sha }}
+          labels: org.opencontainers.image.source=https://github.com/avissian/webtlo
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
