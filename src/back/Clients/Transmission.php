@@ -93,6 +93,7 @@ final class Transmission implements ClientInterface
                 'addedDate',
                 'comment',
                 'status',
+                'labels',
                 'totalSize',
                 'files',
                 'percentDone',
@@ -144,7 +145,8 @@ final class Transmission implements ClientInterface
                 error       : (int) $torrent['error'] !== 0,
                 trackerError: $trackerError,
                 comment     : $torrent['comment'] ?: null,
-                storagePath : $torrent['downloadDir'] ?? null
+                label       : $torrent['labels'][0] ?? null,
+                storagePath : $torrent['downloadDir'] ?? null,
             );
 
             unset($torrent, $torrentName, $torrentHash, $trackerError, $progress);
@@ -423,7 +425,7 @@ final class Transmission implements ClientInterface
 
                 // Записываем токен авторизации в заголовки.
                 $headers[$tokenName] = $sid;
-                $logger->debug('Got transmission auth token', [$sid]);
+                $logger->debug('Got transmission auth token');
             }
         };
     }

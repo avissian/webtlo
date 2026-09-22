@@ -94,7 +94,8 @@ final class Flood implements ClientInterface
                 error       : (bool) $torrentError,
                 trackerError: $errorMessage ?: null,
                 comment     : $torrent['comment'] ?: null,
-                storagePath : $torrent['directory'] ?? null
+                label       : $torrent['tags'][0] ?? null,
+                storagePath : $torrent['directory'] ?? null,
             );
 
             unset($torrent, $torrentHash, $torrentPaused, $torrentError, $errorMessage);
@@ -321,7 +322,7 @@ final class Flood implements ClientInterface
     {
         $sid = $this->jar->getCookieByName('jwt');
         if ($sid !== null) {
-            $this->logger->debug('Got flood auth token', $sid->toArray());
+            $this->logger->debug('Got flood auth token');
 
             return true;
         }

@@ -104,10 +104,7 @@ final class Qbittorrent implements ClientInterface
 
     public function getTorrents(array $filter = []): Torrents
     {
-        /** Получить просто список раздач без дополнительных действий */
-        $simpleRun = (bool) ($filter['simple'] ?? 0);
-
-        $generator = $this->generateTorrentsList(simpleRun: $simpleRun);
+        $generator = $this->generateTorrentsList(filter: $filter);
 
         $torrents = [];
         foreach ($generator as $hash => $payload) {
@@ -126,6 +123,7 @@ final class Qbittorrent implements ClientInterface
                 forced      : (bool) $payload['forced'],
                 trackerError: $payload['tracker_error'] ?: null,
                 comment     : $payload['comment'] ?: null,
+                label       : $payload['category'] ?? null,
                 storagePath : $payload['storagePath'] ?? null
             );
         }
@@ -340,8 +338,8 @@ final class Qbittorrent implements ClientInterface
         // Если какой-то иной статус, прекращаем.
         if ($cookieName === null) {
             $this->logger->debug('Unhandled qbittorrent auth status', [
-                'status' => $statusCode,
-                'cookie' => $response->getHeader('set-cookie'),
+                'status'              => $statusCode,
+                'auth_cookie_present' => $response->hasHeader('set-cookie'),
             ]);
 
             return false;
@@ -349,7 +347,7 @@ final class Qbittorrent implements ClientInterface
 
         $cookie = $this->jar->getCookieByName(name: $cookieName);
         if ($cookie !== null) {
-            $this->logger->debug('Got qbittorrent auth token', $cookie->toArray());
+            $this->logger->debug('Got qbittorrent auth token');
 
             return true;
         }
@@ -491,7 +489,7 @@ final class Qbittorrent implements ClientInterface
         return sprintf('torrents/%s', $actions[$method] ?? '');
     }
 
-    private function createCategory(string $categoryName): void
+    private function createCategory(string $categoryName): bool
     {
         $fields = [
             'category' => $categoryName,
@@ -499,7 +497,7 @@ final class Qbittorrent implements ClientInterface
         ];
 
         try {
-            $this->request(url: 'torrents/createCategory', params: $fields);
+            return $this->request(url: 'torrents/createCategory', params: $fields)->getStatusCode() === 200;
         } catch (GuzzleException $e) {
             $statusCode = $e->getCode();
             if ($statusCode === 400) {
@@ -508,23 +506,34 @@ final class Qbittorrent implements ClientInterface
                 $this->logger->error('Category name is invalid', ['name' => $categoryName]);
             }
         }
+
+        return false;
     }
 
-    private function generateTorrentsList(bool $simpleRun): Generator
+    /**
+     * @param array<string, mixed> $filter
+     */
+    private function generateTorrentsList(array $filter): Generator
     {
+        /** Получить просто список раздач без дополнительных действий */
+        $simpleRun = false;
+        if (isset($filter['simple'])) {
+            $simpleRun = (bool) $filter['simple'];
+            unset($filter['simple']);
+        }
+
         // Получаем и обрабатываем список раздач от клиента.
         $torrents = $this->processTorrents(
-            clientTorrents: $this->requestTorrents(),
+            clientTorrents: $this->requestTorrents(filter: $filter),
             callback      : $simpleRun ? null : fn(string $clientHash) => $this->checkTorrentTrackers($clientHash)
         );
 
         if (!$simpleRun) {
             // Попытка найти ид раздачи в локальных таблицах.
-            $this->tryFillTopicIdFromTopics(torrents: $torrents);
-            $this->tryFillTopicIdFromTorrents(torrents: $torrents);
-
+            $this->tryFillTopicIdFromTopics(torrents: $torrents)
+            || $this->tryFillTopicIdFromTorrents(torrents: $torrents)
             // Для раздач, у которых нет ид раздачи, вытаскиваем комментарий.
-            $this->tryFillTopicIdFromComments(torrents: $torrents);
+            || $this->tryFillTopicIdFromComments(torrents: $torrents);
         }
 
         foreach ($torrents as $hash => $torrent) {
@@ -532,10 +541,13 @@ final class Qbittorrent implements ClientInterface
         }
     }
 
-    private function requestTorrents(): Generator
+    /**
+     * @param array<string, mixed> $filter
+     */
+    private function requestTorrents(array $filter): Generator
     {
         Timers::start('torrents_info');
-        $response = $this->makeRequest(url: 'torrents/info');
+        $response = $this->makeRequest(url: 'torrents/info', params: $filter);
         Timers::stash('torrents_info');
 
         foreach ($response as $torrent) {
@@ -559,12 +571,7 @@ final class Qbittorrent implements ClientInterface
             $trackerError  = null;
 
             // Процент загрузки торрента.
-            $progress = $torrent['progress'];
-            if ($progress === 1 && !empty($torrent['availability'])) {
-                if ($torrent['availability'] > 0 && $torrent['availability'] < 1) {
-                    $progress = (float) $torrent['availability'];
-                }
-            }
+            $progress = $this->getTorrentProgress(torrent: $torrent);
 
             // Получение ошибок трекера.
             if ($callback !== null) {
@@ -577,9 +584,12 @@ final class Qbittorrent implements ClientInterface
                 }
             }
 
+            // У qBittorrent 5.0.0 (webApi 2.11) появилось поле comment в выдаче.
+            $comment = $torrent['comment'] ?? null;
+
             $torrents[$torrentHash] = [
-                'topic_id'      => null,
-                'comment'       => null,
+                'topic_id'      => $this->getTorrentTopicId(comment: (string) $comment),
+                'comment'       => $comment,
                 'done'          => $progress,
                 'error'         => $torrentError,
                 'name'          => $torrent['name'],
@@ -589,6 +599,7 @@ final class Qbittorrent implements ClientInterface
                 'total_size'    => $torrent['total_size'],
                 'client_hash'   => $clientHash,
                 'storagePath'   => $torrent['save_path'],
+                'category'      => $torrent['category'],
                 'tracker_error' => $trackerError,
             ];
 
@@ -651,6 +662,39 @@ final class Qbittorrent implements ClientInterface
         return Helper::convertKeysToString(array: $properties);
     }
 
+    /**
+     * qBittorrent считает progress только по выбранным файлам. Начиная с 5.2.0
+     * torrents/info содержит число загруженных и всех частей. Для старых версий
+     * сохраняем прежнюю оценку по availability.
+     *
+     * В документации изменения API, как обычно, не описаны.
+     * Опытным путём установлено, что pieces_* появились в WebAPI 2.15.1+
+     *
+     * @param array<string, mixed> $torrent
+     */
+    private function getTorrentProgress(array $torrent): float
+    {
+        $progress = (float) $torrent['progress'];
+        if ($progress !== 1.0) {
+            return $progress;
+        }
+
+        $piecesHave = $torrent['pieces_have'] ?? null;
+        $piecesNum  = $torrent['pieces_num'] ?? null;
+        if (
+            is_int($piecesHave) && is_int($piecesNum)
+            && $piecesNum > 0 && $piecesHave >= 0 && $piecesHave <= $piecesNum
+        ) {
+            return $piecesHave / $piecesNum;
+        }
+
+        if (!empty($torrent['availability']) && $torrent['availability'] > 0 && $torrent['availability'] < 1) {
+            return (float) $torrent['availability'];
+        }
+
+        return $progress;
+    }
+
     private function checkLabelExists(string $labelName = ''): void
     {
         if (empty($labelName)) {
@@ -664,10 +708,11 @@ final class Qbittorrent implements ClientInterface
         }
 
         if (!array_key_exists($labelName, $this->categories)) {
-            $this->createCategory(categoryName: $labelName);
-            $this->categories[$labelName] = [
-                'name' => $labelName,
-            ];
+            if ($this->createCategory(categoryName: $labelName)) {
+                $this->categories[$labelName] = [
+                    'name' => $labelName,
+                ];
+            }
         }
     }
 
@@ -680,23 +725,25 @@ final class Qbittorrent implements ClientInterface
     {
         Timers::start('comment_search');
 
-        $emptyTopics = self::getEmptyTopics(torrents: $torrents);
-        if (count($emptyTopics)) {
-            $this->logger->debug('Start search torrents in comment column', ['empty' => count($emptyTopics)]);
+        $emptyHashed = self::getEmptyTopics(torrents: $torrents);
+        if (!count($emptyHashed)) {
+            return;
+        }
 
-            foreach ($emptyTopics as $torrentHash => $torrent) {
-                $properties = $this->getProperties(torrentHash: $torrent['client_hash']);
-                if (!empty($properties)) {
-                    $torrents[$torrentHash]['topic_id'] = $this->getTorrentTopicId(comment: $properties['comment']);
-                    $torrents[$torrentHash]['comment']  = $properties['comment'];
-                }
+        $this->logger->debug('Start search torrents in comment column', ['empty' => count($emptyHashed)]);
 
-                unset($torrentHash, $torrent, $properties);
+        foreach ($emptyHashed as $torrentHash => $torrent) {
+            $properties = $this->getProperties(torrentHash: $torrent['client_hash']);
+            if (!empty($properties)) {
+                $torrents[$torrentHash]['topic_id'] = $this->getTorrentTopicId(comment: $properties['comment']);
+                $torrents[$torrentHash]['comment']  = $properties['comment'];
             }
 
-            Timers::stash('comment_search');
-            $this->logger->debug('End search torrents in comment column');
+            unset($torrentHash, $torrent, $properties);
         }
+
+        Timers::stash('comment_search');
+        $this->logger->debug('End search torrents in comment column');
     }
 
     /**

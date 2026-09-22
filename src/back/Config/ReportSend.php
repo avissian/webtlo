@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace KeepersTeam\Webtlo\Config;
 
 use KeepersTeam\Webtlo\Enum\SendReportMethod as Method;
+use KeepersTeam\Webtlo\External\ApiReport\KeepingStatuses;
+use KeepersTeam\Webtlo\Module\Report\ReportStatus;
 
 /**
  * Параметры отправки и получения отчётов.
@@ -14,7 +16,7 @@ final class ReportSend
     /**
      * @param bool      $sendReports         отправлять ли отчёт в целом
      * @param Method    $sendMethod          метод отправки отчётов (подразделы|хеши)
-     * @param int<0, 7> $reporterId          порядковый номер инстанса
+     * @param int<0, 7> $reporterId          порядковый номер клиента
      * @param bool      $sendTelemetry       отправлять дополнительные сведения об установке программы и настройках
      * @param bool      $excludeAuthored     исключить ли свои раздачи из отчёта
      * @param bool      $unsetOtherTopics    при отправке отчёта по подразделу, снимать признак хранения с раздач, которых больше нет в БД (в т.ч. разрегистрированные и обновлённые раздачи)
@@ -37,4 +39,13 @@ final class ReportSend
         public readonly array  $excludedClients,
         public readonly array  $excludedKeepers,
     ) {}
+
+    public function getStatusRules(): ReportStatus
+    {
+        return new ReportStatus(
+            subForum         : KeepingStatuses::buildSubForumStatus(reporterId: $this->reporterId),
+            keptTopics       : KeepingStatuses::buildTopicStatus(reporterId: $this->reporterId),
+            downloadingTopics: KeepingStatuses::buildTopicStatus(reporterId: $this->reporterId, downloading: true),
+        );
+    }
 }

@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 $finder = PhpCsFixer\Finder::create()
-    ->in(['src', 'public'])
+    ->in(['public', 'src', 'tests'])
 ;
 
 $config = new PhpCsFixer\Config();
@@ -66,7 +66,7 @@ $rules = [
 ];
 
 return $config
-    ->setCacheFile('.cache/php-cs-fixer.cache')
+    ->setCacheFile('.cache/php-cs-fixer/fixer.cache')
     ->setRules($rules)
     ->setFinder($finder)
     ->setRiskyAllowed(true)
