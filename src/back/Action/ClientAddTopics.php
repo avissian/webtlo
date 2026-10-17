@@ -44,7 +44,13 @@ final class ClientAddTopics
         private readonly TorrentDownload $downloadOptions,
         private readonly Torrents        $torrents,
         private readonly Topics          $topics,
-    ) {
+    ) {}
+
+    /**
+     * @param string[] $hashes
+     */
+    public function process(array $hashes): string
+    {
         // Проверим наличие нужных параметров.
         if (!$this->subsections->count()) {
             throw new RuntimeException('В настройках не найдены хранимые подразделы');
@@ -53,13 +59,7 @@ final class ClientAddTopics
         if (!$this->clients->count()) {
             throw new RuntimeException('В настройках не найдены торрент-клиенты');
         }
-    }
 
-    /**
-     * @param string[] $hashes
-     */
-    public function process(array $hashes): string
-    {
         Timers::start('add_topics_to_client');
         $this->logger->info('Запущен процесс добавления раздач в торрент-клиенты...');
 
