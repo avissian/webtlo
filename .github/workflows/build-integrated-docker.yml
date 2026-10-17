@@ -1,0 +1,122 @@
+name: Build integrated Docker image
+
+on:
+  push:
+    branches:
+      - integrated-4.6
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integrated-docker-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE_VERSION: '4.6.0-fork.1'
+
+jobs:
+  validate:
+    uses: ./.github/workflows/sub-check.yml
+    with:
+      PHP_VERSION: '8.2'
+
+  build:
+    needs: validate
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        platform: [linux/amd64, linux/arm64]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer
+
+      - name: Run QA checks
+        run: |
+          composer install --ignore-platform-reqs --prefer-dist
+          php qa/TransmissionActionTest.php
+          php qa/TransmissionLabelsTest.php
+          php qa/UnregisteredTopicAddTest.php
+
+      - name: Set image version
+        run: |
+          short_sha="${GITHUB_SHA:0:7}"
+          jq \
+            --arg version "$IMAGE_VERSION" \
+            --arg sha "$short_sha" \
+            '.version = $version | .sha = $sha | .installation = "docker" | .github = "https://github.com/avissian/webtlo"' \
+            version.json > version.tmp.json
+          mv version.tmp.json version.json
+          jq -e --arg expected "$IMAGE_VERSION" \
+            '.version == $expected and .installation == "docker" and (.sha | length == 7)' version.json
+
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: prod
+          push: false
+          load: true
+          provenance: false
+          platforms: ${{ matrix.platform }}
+          tags: webtlo:integrated
+
+      - name: Check image version
+        run: |
+          docker run --rm --platform '${{ matrix.platform }}' --entrypoint cat \
+            webtlo:integrated /var/www/webtlo/version.json \
+            | jq -e --arg expected "$IMAGE_VERSION" \
+                '.version == $expected and .installation == "docker" and (.sha | length == 7)'
+
+  publish:
+    if: github.repository == 'avissian/webtlo'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set image version
+        run: |
+          short_sha="${GITHUB_SHA:0:7}"
+          jq \
+            --arg version "$IMAGE_VERSION" \
+            --arg sha "$short_sha" \
+            '.version = $version | .sha = $sha | .installation = "docker" | .github = "https://github.com/avissian/webtlo"' \
+            version.json > version.tmp.json
+          mv version.tmp.json version.json
+
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: prod
+          push: true
+          provenance: false
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ghcr.io/avissian/webtlo:integrated-4.6
+            ghcr.io/avissian/webtlo:sha-${{ github.sha }}
+          labels: org.opencontainers.image.source=https://github.com/avissian/webtlo
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

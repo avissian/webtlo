@@ -1,6 +1,6 @@
 {
-    "version": "4.6.1",
-    "github": "https://github.com/keepers-team/webtlo",
+    "version": "4.6.1-fork.1",
+    "github": "https://github.com/avissian/webtlo",
     "wiki": "https://webtlo.keeps.cyou",
     "release": "https://github.com/keepers-team/webtlo/releases/latest",
     "release_api": "https://api.github.com/repos/keepers-team/webtlo/releases/latest"
