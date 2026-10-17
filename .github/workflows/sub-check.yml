@@ -41,6 +41,9 @@ jobs:
       - name: Test Transmission RPC actions
         run: php qa/TransmissionActionTest.php
 
+      - name: Test Transmission labels
+        run: php qa/TransmissionLabelsTest.php
+
       - name: Restore tools cache
         id: cache-tools
         uses: actions/cache/restore@v6
