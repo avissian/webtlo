@@ -82,5 +82,5 @@
 - `max_input_vars=100000`
 
 Пример настроек `php.ini`:
-[docker-php-ini](https://github.com/keepers-team/webtlo/blob/master/docker/rootfs/etc/php82/php.ini),
+[docker-php-ini](https://github.com/keepers-team/webtlo/blob/master/docker/rootfs/etc/php84/php.ini),
 [standalone-php-ini](https://github.com/keepers-team/webtlo/blob/master/win/overlay/php/php.ini)
