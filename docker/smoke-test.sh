@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-image="${1:?Usage: bash docker/smoke-test.sh IMAGE}"
+image="${1:?Usage: bash docker/smoke-test.sh IMAGE [--worker-status]}"
 container="webtlo-smoke-$$"
 
 cleanup() {
@@ -80,6 +80,26 @@ if [[ "$html" != *'<title>web-TLO-'* ]]; then
     printf '%s\n' "$html" >&2
     echo 'WebTLO did not render its main page' >&2
     exit 1
+fi
+
+if [ "${2:-}" = '--worker-status' ]; then
+    # The integrated branch serves these counters through a separate FPM pool.
+    curl --fail --silent --show-error --max-time 15 "$url/php/worker_status.php" |
+        docker exec --interactive "$container" php -r '
+            $data = json_decode(stream_get_contents(STDIN), true, 512, JSON_THROW_ON_ERROR);
+            echo json_encode($data, JSON_PRETTY_PRINT), PHP_EOL;
+            $fields = ["active_processes", "idle_processes", "listen_queue", "max_children"];
+            foreach ($fields as $field) {
+                if (!isset($data[$field]) || !is_int($data[$field]) || $data[$field] < 0) {
+                    fwrite(STDERR, "Invalid worker status counter: $field\n");
+                    exit(1);
+                }
+            }
+            if (count($data) !== count($fields) || $data["max_children"] !== 2) {
+                fwrite(STDERR, "Unexpected worker status response\n");
+                exit(1);
+            }
+        '
 fi
 
 echo 'Docker smoke test passed'
