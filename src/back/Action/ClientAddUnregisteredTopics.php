@@ -335,12 +335,14 @@ final class ClientAddUnregisteredTopics
             return $dataFolder;
         }
 
-        $subFolder = match ($subForum->subFolderType) {
-            SubFolderType::Topic => (string) $topic->id,
-            SubFolderType::Hash  => $topic->hash,
+        $subFolders = match ($subForum->subFolderType) {
+            SubFolderType::Topic         => [(string) $topic->id],
+            SubFolderType::ShardTopic256 => [sprintf('%03d', $topic->id % 256), (string) $topic->id],
+            SubFolderType::Hash          => [$topic->hash],
+            SubFolderType::ShardHash2    => [substr($topic->hash, 0, 2), $topic->hash],
         };
         $delimiter = str_contains($dataFolder, '/') ? '/' : '\\';
 
-        return $dataFolder . $delimiter . $subFolder;
+        return $dataFolder . $delimiter . implode($delimiter, $subFolders);
     }
 }
