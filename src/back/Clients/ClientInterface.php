@@ -103,11 +103,6 @@ interface ClientInterface
     public function getTorrentAddingSleep(): int;
 
     /**
-     * Может ли торрент-клиент присваивать метки при добавлении раздачи.
-     */
-    public function isLabelAddingAllowed(): bool;
-
-    /**
      * Сколько секунд ждать перед установкой метки после добавления раздач.
      * null, если клиент не поддерживает метки.
      */
