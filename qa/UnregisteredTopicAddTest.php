@@ -30,7 +30,12 @@ function checkUnregistered(bool $condition, string $message): void
 
 $pdo = new PDO('sqlite::memory:');
 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-$db = new SQLiteAdapter($pdo, new NullLogger());
+
+$reflection = new ReflectionClass(SQLiteAdapter::class);
+$db         = $reflection->newInstanceWithoutConstructor();
+$reflection->getProperty('databasePath')->setValue($db, ':memory:');
+$reflection->getProperty('logger')->setValue($db, new NullLogger());
+$reflection->getProperty('pdo')->setValue($db, $pdo);
 $db->executeQuery(<<<'SQL'
     CREATE TABLE Torrents (
         info_hash TEXT NOT NULL,
