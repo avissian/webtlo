@@ -103,6 +103,17 @@ interface ClientInterface
     public function getTorrentAddingSleep(): int;
 
     /**
+     * Может ли торрент-клиент присваивать метки при добавлении раздачи.
+     */
+    public function isLabelAddingAllowed(): bool;
+
+    /**
+     * Сколько секунд ждать перед установкой метки после добавления раздач.
+     * null, если клиент не поддерживает метки.
+     */
+    public function getPostAddLabelDelay(int $torrentCount): ?int;
+
+    /**
      * Установка своего домена трекера.
      */
     public function setDomain(?string $domain): void;

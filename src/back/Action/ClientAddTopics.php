@@ -173,13 +173,19 @@ final class ClientAddTopics
 
                 // Указываем раздачам метку, если она не выставлена при добавлении раздач.
                 if ($subForum->label !== '' && !$targetClient->isLabelAddingAllowed()) {
-                    // Ждём добавления раздач, чтобы проставить метку
-                    sleep((int) round(count($addedTorrentHashes) / 20) + 1);
+                    $delay = $targetClient->getPostAddLabelDelay($countAddedTorrents);
+                    if ($delay === null) {
+                        $this->logger->warning('Торрент-клиент "{tag}" не поддерживает метки', $logClient);
+                    } else {
+                        if ($delay > 0) {
+                            sleep($delay);
+                        }
 
-                    // устанавливаем метку
-                    $response = $targetClient->setLabel(torrentHashes: $addedTorrentHashes, label: $subForum->label);
-                    if ($response === false) {
-                        $this->logger->warning('Возникли проблемы при отправке запроса на установку метки', $logClient);
+                        // устанавливаем метку
+                        $response = $targetClient->setLabel(torrentHashes: $addedTorrentHashes, label: $subForum->label);
+                        if ($response === false) {
+                            $this->logger->warning('Возникли проблемы при отправке запроса на установку метки', $logClient);
+                        }
                     }
                 }
 

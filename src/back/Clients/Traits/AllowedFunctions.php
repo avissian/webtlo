@@ -41,4 +41,9 @@ trait AllowedFunctions
             )
         );
     }
+
+    public function getPostAddLabelDelay(int $torrentCount): ?int
+    {
+        return (int) round($torrentCount / 20) + 1;
+    }
 }

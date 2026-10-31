@@ -86,6 +86,17 @@ final class Transmission implements ClientInterface
         }
     }
 
+    public function isLabelAddingAllowed(): bool
+    {
+        return $this->rpcVersion >= 17;
+    }
+
+    public function getPostAddLabelDelay(int $torrentCount): ?int
+    {
+        // В Transmission 3.0 ответ torrent-add приходит после создания раздачи.
+        return $this->rpcVersion >= 16 ? 0 : null;
+    }
+
     public function getTorrents(array $filter = []): Torrents
     {
         $fields = [
@@ -186,8 +197,15 @@ final class Transmission implements ClientInterface
         if (!empty($savePath)) {
             $fields['download-dir'] = $savePath;
         }
-        if (!empty($label)) {
-            $fields['labels'] = [$this->prepareLabel(label: $label)];
+        if ($label !== '' && $this->rpcVersion >= 16) {
+            $label = $this->prepareLabel(label: $label);
+            if ($label === null) {
+                return false;
+            }
+
+            if ($label !== '' && $this->isLabelAddingAllowed()) {
+                $fields['labels'] = [$label];
+            }
         }
 
         $result = $this->makeRequest(method: 'torrent-add', params: $fields);
@@ -210,10 +228,15 @@ final class Transmission implements ClientInterface
             return false;
         }
 
+        $label = $this->prepareLabel(label: $label);
+        if ($label === null) {
+            return false;
+        }
+
         return $this->actionTorrents(
             method: 'torrent-set',
             hashes: $torrentHashes,
-            extra : ['labels' => [$this->prepareLabel(label: $label)]],
+            extra : ['labels' => $label === '' ? [] : [$label]],
         );
     }
 
@@ -467,8 +490,15 @@ final class Transmission implements ClientInterface
         };
     }
 
-    private function prepareLabel(string $label): string
+    private function prepareLabel(string $label): ?string
     {
-        return (string) str_replace(',', '', $label);
+        $label = trim($label);
+        if (str_contains($label, ',')) {
+            $this->logger->warning('Transmission label contains a forbidden comma');
+
+            return null;
+        }
+
+        return $label;
     }
 }
